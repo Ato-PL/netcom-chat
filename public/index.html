@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Net.com Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="login">
+        <h2>Net.com – Zaloguj się</h2>
+        <input type="text" id="username" placeholder="Login">
+        <input type="password" id="password" placeholder="Hasło">
+        <button id="loginBtn">Zaloguj</button>
+        <div id="loginStatus"></div>
+    </div>
+
+    <div id="chat" style="display:none;">
+        <div id="users"></div>
+        <div id="messages"></div>
+        <input type="text" id="messageInput" placeholder="Wpisz wiadomość lub komendę">
+        <button id="sendBtn">Wyślij</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const loginDiv = document.getElementById('login');
+        const chatDiv = document.getElementById('chat');
+        const messagesDiv = document.getElementById('messages');
+        const usersDiv = document.getElementById('users');
+
+        document.getElementById('loginBtn').onclick = () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            socket.emit('login', { username, password });
+        };
+
+        socket.on('loginSuccess', ({ username, users, messages }) => {
+            loginDiv.style.display = 'none';
+            chatDiv.style.display = 'block';
+            updateUsers(users);
+            messagesDiv.innerHTML = '';
+            messages.forEach(addMessage);
+        });
+
+        socket.on('loginFailed', () => {
+            document.getElementById('loginStatus').innerText = '❌ Nieprawidłowy login lub hasło.';
+        });
+
+        socket.on('message', addMessage);
+        socket.on('serverMessage', msg => addMessage({ user: '🛠️ System', text: msg, time: new Date().toLocaleTimeString() }));
+        socket.on('clearMessages', () => messagesDiv.innerHTML = '');
+        socket.on('updateUsers', updateUsers);
+
+        document.getElementById('sendBtn').onclick = sendMessage;
+        document.getElementById('messageInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function sendMessage() {
+            const msg = document.getElementById('messageInput').value;
+            if (msg.trim() !== '') {
+                socket.emit('sendMessage', msg);
+                document.getElementById('messageInput').value = '';
+            }
+        }
+
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.innerText = `[${msg.time}] ${msg.user}: ${msg.text}`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateUsers(users) {
+            usersDiv.innerHTML = '<h3>🧑‍🤝‍🧑 Uczestnicy:</h3>';
+            for (const [user, data] of Object.entries(users)) {
+                let color = '🔴';
+                if (data.lastActive) {
+                    const diff = Date.now() - data.lastActive;
+                    if (diff < 5 * 60 * 1000) color = '🟢';
+                    else if (diff < 90 * 60 * 1000) color = '🟠';
+                }
+                usersDiv.innerHTML += `${color} ${user}<br>`;
+            }
+        }
+    </script>
+</body>
+</html>
